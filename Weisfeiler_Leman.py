@@ -1,6 +1,6 @@
 import networkx as nx
-import multiset as m 
-import json
+import multiset as m
+
 class WL:
     def __init__(self,g,scheme):
         self.histogram_vectors = []

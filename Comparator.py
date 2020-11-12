@@ -5,8 +5,12 @@ import shutil
 import copy
 import CallGraphComp as cgc
 import MemGraphComp as mgc
+import ControlFlowGraphComp as cfgc
 import compression_schemes as schemes
 import llvmlite.binding as llvm
+from networkx.drawing.nx_pydot import write_dot
+from networkx.drawing.nx_pydot import read_dot
+
 mem_graph = "./{seadsa} -sea-dsa=butd-cs  -sea-dsa-dot  {path} -sea-dsa-dot-outdir=mem_results_{number}"
 call_graph = "./{seadsa}  --sea-dsa-callgraph-dot {path} -sea-dsa-dot-outdir=call_results_{number}"
 class Comparator:
@@ -69,6 +73,8 @@ class Comparator:
             self.set_optimization([],[])
         self.g1_call = self.__get_call_graph("optimized_module_1/module.ll",1)
         self.g2_call = self.__get_call_graph("optimized_module_2/module.ll",2)
+        self.g1_call = self.cleanup(self.g1_call)
+        self.g2_call = self.cleanup(self.g2_call)
         if node_identifier == 'LABEL':
             self.__run_path.append(self.__use_call_graphs_string_compression)
         elif node_identifier == 'DEGREE':
@@ -76,6 +82,45 @@ class Comparator:
         else:
             raise Exception("Unknown node identifier")
         pass
+
+    def cleanup(self, graph):
+        nodes = list(graph.nodes(data=True))
+        for k, v in nodes:
+            try:
+                if "external" == v['label']:
+                    graph.remove_node(k)
+                elif "path_goal" in v['label']:
+                    v['label'] = "{verifier.error}"
+                elif "path_nongoal" in v['label']:
+                    v['label'] = "{verifier.error}"
+                elif "rand" in v['label']:
+                    v['label'] = "{nd}"
+                elif "path_start" in v['label']:
+                    graph.remove_node(k)
+                elif "time" in v['label']:
+                    ins = [in_edge[0] for in_edge in graph.in_edges(k)]
+                    outs = [out_edge[1] for out_edge in graph.out_edges(k)]
+                    graph.remove_node(k)
+                    for in_edge in ins:
+                        for out_edge in outs:
+                            graph.add_edge(in_edge, out_edge)
+            except:
+                graph.nodes[k]['label'] = "exit"
+
+        nodes = graph.nodes(data=True)
+        copies = [k for k, v in nodes if v['label'] == "{verifier.error}"]
+        if len(copies) == 2:
+            ins = [in_edge[0] for in_edge in graph.in_edges(copies[1])]
+            outs = [out_edge[1] for out_edge in graph.out_edges(copies[1])]
+            for out_edge in outs:
+                if out_edge not in [o[1] for o in graph.out_edges(copies[0])]:
+                    graph.add_edge(copies[0], out_edge)
+            for in_edge in ins:
+                if in_edge not in [i[0] for i in graph.in_edges(copies[0])]:
+                    graph.add_edge(copies[0], in_edge)
+            graph.remove_node(copies[1])
+        return graph
+
     def use_mem_graphs(self, node_identifier = 'LABEL',composing_functions="MAIN"):
         if self.__optimization_set == False:
             self.set_optimization([],[])
@@ -193,7 +238,7 @@ class Comparator:
         self.metrics["Control Flow Graph with Label Values for Distinction"]=cfg_comp.score
     def __use_cfg_iterator(self):
         scheme = schemes.IteratorScheme()
-        cfg_comp = cgc.CallGraphComp(self.g1_cfg,self.g2_cfg,scheme)
+        cfg_comp = cfgc.ControlFlowGraphComp(self.g1_cfg,self.g2_cfg,scheme)
         self.cfg_similarity_iterator = cfg_comp.score
         self.metrics["Control Flow Graph with Node Degree Values for Distinction"]=cfg_comp.score
         pass

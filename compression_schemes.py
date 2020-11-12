@@ -43,6 +43,7 @@ class StringCompressionScheme:
         for node in g.nodes:
             try:
                 label = g.nodes[node]['label']
+                label = label.strip("\"")
             except KeyError:
                 label = '0'
                 pass

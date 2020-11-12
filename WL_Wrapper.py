@@ -1,4 +1,5 @@
 import Weisfeiler_Leman as w
+
 class WL_Wrapper(w.WL):
     def __init__(self, G1, G2,scheme):
         self.g1 = w.WL(G1,scheme)
